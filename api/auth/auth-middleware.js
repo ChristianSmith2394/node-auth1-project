@@ -1,4 +1,5 @@
-const User = require('../users/users-model')
+const model = require('../users/users-model');
+
 /*
   If the user does not have a session saved in the server
   status 401
@@ -8,9 +9,9 @@ const User = require('../users/users-model')
 */
 const restricted = (req, res, next) => {
   if(req.session && req.session.user) {
-    next()
-  }else{
-    res.status(401).json('You shall not pass')
+    next();
+  } else {
+    res.status(401).json('Please log in to view this content');
   }
 }
 
@@ -21,42 +22,44 @@ const restricted = (req, res, next) => {
     "message": "Username taken"
   }
 */
-async function checkUsernameFree(req, res, next ) {
-  try{
-    const users = await User.findBy({ username: req.body.username })
-    if(!users.length ){
-      next()
-    }else {
-      next({
-      message: 'Username taken'
-    })
-  }
-  }catch(err) {
-    next(err)
+const checkUsernameFree = async (req, res, next) => {
+  try {
+    const user = await model.findBy({username: req.body.username});
+    console.log(user.username);
+    console.log(req.body.username);
+    if(user.username === req.body.username) {
+      res.status(422).json({
+        message: 'Username taken'
+      });
+    } else {
+      next();
+    }
+  } catch(err) {
+    res.status(500).json(`Server error: ${err}`);
   }
 }
 
 /*
-  If the username in req.body does NOT exist in the database
+If the username in req.body does NOT exist in the database
   status 401
   {
     "message": "Invalid credentials"
   }
 */
-async function checkUsernameExists(req, res, next) {
-  try{
-    const users = await User.findBy({ username: req.body.username })
-    if(!users.length ){
-      res.user = users[0]
-      next()
-    }else {
-      next({
-      message: 'Invalid credentials',
-      status: 401,
-    })
-  }
-  }catch(err) {
-    next(err)
+const checkUsernameExists = async (req, res, next) => {
+  try {
+    const user = await model.findBy({username: req.body.username});
+    console.log(user.username);
+    if(!user.username) {
+      res.status(401).json({
+        message: 'Invalid credentials'
+      }) 
+    } else {
+      req.userData = user;
+      next();
+    }
+  } catch(err) {
+    res.status(500).json(`Server error: ${err}`);
   }
 }
 
@@ -66,19 +69,22 @@ async function checkUsernameExists(req, res, next) {
   {
     "message": "Password must be longer than 3 chars"
   }
-*/
-function checkPasswordLength(req, res, next) {
-  if(!req.body.password || req.body.password.length < 3){
-    next({
-      message: 'Password must be longer than 3 chars',
-      status: 422,
-    })
-  }else {
-    next()
+*/const checkPasswordLength = (req, res, next) => {
+  try {
+    if(!req.body.password || req.body.password.length <= 3) {
+      res.status(422).json({
+        message: 'Password must be longer than 3 chars'
+      });
+    } else {
+      next();
+    }
+  } catch(err) {
+    res.status(500).json(`Server error: ${err}`);
   }
 }
 
 // Don't forget to add these to the `exports` object so they can be required in other modules
+
 module.exports = {
   restricted,
   checkUsernameFree,

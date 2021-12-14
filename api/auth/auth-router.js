@@ -1,13 +1,13 @@
+const express    = require('express');
+const model      = require('../users/users-model');
+const middleware = require('./auth-middleware');
+const bcrypt = require('bcryptjs');
+const router = express.Router();
+
+
 // Require `checkUsernameFree`, `checkUsernameExists` and `checkPasswordLength`
 // middleware functions from `auth-middleware.js`. You will need them here!
-const router = require('express').Router()
-const bcrypt = require('bcryptjs')
-const User = require('../users/users-model')
-const {
-  checkPasswordLength,
-  checkUsernameExists,
-  checkUsernameFree,
-} = require('./auth-middleware')
+
 
 /**
   1 [POST] /api/auth/register { "username": "sue", "password": "1234" }
@@ -28,16 +28,6 @@ const {
     "message": "Password must be longer than 3 chars"
   }
  */
-router.post('register', checkPasswordLength, checkUsernameFree, (req, res, next) => {
-  const { username, password } = req.body
-  const hash = bcrypt.hashSync(password, 8)
-
-  User.add({ username, password: hash })
-    .then(registered => {
-      res.status(201).json(registered)
-    })
-    .catch(next)
-})
 /**
   2 [POST] /api/auth/login { "username": "sue", "password": "1234" }
   response:
@@ -51,20 +41,6 @@ router.post('register', checkPasswordLength, checkUsernameFree, (req, res, next)
     "message": "Invalid credentials"
   }
  */
-router.post('login', checkUsernameExists, (req, res, next) => {
-  const { password } = req.body
-  if(bcrypt.compareSync(password, req.user.password)){
-    req.session.user = req.user
-    res.json({
-      message: `Welcome ${req.user.username}`,
-    })
-  }else {
-    next({
-      status: 401,
-      message: 'Invalid credentials'
-    })
-  }
-})
 /**
   3 [GET] /api/auth/logout
   response for logged-in users:
@@ -78,9 +54,54 @@ router.post('login', checkUsernameExists, (req, res, next) => {
     "message": "no session"
   }
  */
-router.get('logout', (req, res, next) => {
-  res.json('logout')
-})
- 
+
+
 // Don't forget to add the router to the `exports` object so it can be required in other modules
-module.exports = router
+
+router.get('/logout', (req, res, next) => {
+  if(req.session) {
+    req.session.destroy(err => {
+      if(err) {
+        res.json(`Can't logout: ${err.message}`);
+      } else {
+        res.json('You were logged out');
+      }
+    })
+  } else {
+    res.json(`Session wasn't set`);
+  }
+});
+
+router.post('/login', middleware.checkUsernameExists, (req, res, next) => {
+  let {username, password} = req.body;
+
+  model.findBy({username})
+    .then(user => {
+      if(user && bcrypt.compareSync(password, user.password)) {
+        req.session.user = req.userData;
+        res.status(200).json({message: `Welcome ${user.username}`});
+
+      } else {
+        res.status(401).json({message: 'Invalid credentials'});
+      }
+    })
+    .catch(error => {
+      res.status(500).json(error);
+    });
+});
+
+router.post('/register', middleware.checkUsernameFree, middleware.checkPasswordLength, (req, res, next) => {
+  const credentials = req.body;
+  const hash = bcrypt.hashSync(credentials.password, 14);
+  credentials.password = hash;
+  model.add(credentials)
+    .then(success => {
+      res.status(200).json(success);
+    })
+    .catch(error => {
+      res.status(500).json(`Server error ${error}`);
+    })
+});
+
+
+module.exports = router; 
